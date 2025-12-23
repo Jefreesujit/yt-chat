@@ -35,7 +35,13 @@ const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
             style={{ alignSelf: 'flex-start' }}
           >
             <div>
-              <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
+              {message.content ? (
+                <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
+              ) : (
+                <span className="text-gray-500 italic">
+                  I apologize, but I couldn&apos;t generate a response. Please try again.
+                </span>
+              )}
             </div>
           </div>
         </>
