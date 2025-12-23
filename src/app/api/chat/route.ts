@@ -26,9 +26,9 @@ export async function POST(req: Request) {
   let systemPrompt = SYSTEM_PROMPT.replace('{{videoContext}}', context);
   const result = await streamText({
     // @ts-ignore
-    model: togetherai('meta-llama/Llama-3.3-70B-Instruct-Turbo-Free'),
+    model: togetherai('ServiceNow-AI/Apriel-1.6-15b-Thinker'),
     system: systemPrompt,
-    maxTokens: 1000,
+    maxTokens: 8000,
     messages: convertToCoreMessages(messages),
     onFinish: async(result) => {
       const updatedMessages = [
