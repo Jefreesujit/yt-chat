@@ -1,18 +1,16 @@
-import { NextResponse } from "next/server";
 /* -----------------Globals--------------- */
-import { NextRequest } from "next/server";
-
-/* -----------------Helpers & Hooks--------------- */
-import { buffer } from "@/lib/utils";
-import { loadTranscriptIntoVectorDB } from "@/lib/vectordb";
-import { createChat } from "@/lib/datastore";
+import { NextRequest, NextResponse } from "next/server";
 import { currentUser } from '@clerk/nextjs/server';
 
+/* -----------------Helpers & Hooks--------------- */
+import { buffer, getVideoId } from "@/lib/utils";
+import { loadTranscriptIntoVectorDB } from "@/lib/vectordb";
+import { createChat } from "@/lib/datastore";
+
 /* -----------------Third-party Libraries--------------- */
-import { YoutubeTranscript } from 'youtube-transcript';
+import { fetchTranscript } from 'youtube-transcript-plus';
 // tslint:disable-next-line
 import YoutubeMetadata from 'youtube-meta-data';
-import { getVideoId } from '@/lib/utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,7 +34,27 @@ export async function POST(request: NextRequest) {
       url: videoUrl,
     };
 
-    const transcript = await YoutubeTranscript.fetchTranscript(videoUrl);
+    let transcript;
+    try {
+      transcript = await fetchTranscript(videoUrl);
+    } catch (transcriptError: any) {
+      return NextResponse.json({
+        body: 'Failed to fetch transcript. The video may not be available or may not have captions available.',
+        error: 'TRANSCRIPT_ERROR',
+      }, {
+        status: 400,
+      });
+    }
+
+    if (!transcript || transcript.length === 0) {
+      return NextResponse.json({
+        body: 'Failed to fetch transcript. The video may not have captions available.',
+        error: 'TRANSCRIPT_ERROR',
+      }, {
+        status: 400,
+      });
+    }
+
     const chat = await createChat(userId, videoDeatails);
     if (!chat) {
       return NextResponse.json({
@@ -46,7 +64,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    console.log('chat', chat);
     await loadTranscriptIntoVectorDB(videoUrl, transcript, chat.chat_id);
     return NextResponse.json({
       chatId: chat.chat_id,

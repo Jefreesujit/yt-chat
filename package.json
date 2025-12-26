@@ -35,7 +35,7 @@
     "tailwindcss-animate": "^1.0.7",
     "youtube-meta-data": "^0.1.6",
     "youtube-search-api": "^1.2.2",
-    "youtube-transcript": "^1.2.1"
+    "youtube-transcript-plus": "^1.1.1"
   },
   "devDependencies": {
     "@types/md5": "^2.3.5",
