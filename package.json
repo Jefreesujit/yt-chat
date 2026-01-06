@@ -34,7 +34,6 @@
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
     "yt-transcript-ts": "^0.2.0",
-    "youtube-meta-data": "^0.1.6",
     "youtube-search-api": "^1.2.2"
   },
   "devDependencies": {

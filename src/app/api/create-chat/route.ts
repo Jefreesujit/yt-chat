@@ -9,8 +9,41 @@ import { createChat } from "@/lib/datastore";
 
 /* -----------------Third-party Libraries--------------- */
 import { YouTubeTranscriptApi } from 'yt-transcript-ts';
-// tslint:disable-next-line
-import YoutubeMetadata from 'youtube-meta-data';
+
+const fetchVideoMetadata = async (videoId: string) => {
+  try {
+    // Fetch video page to extract metadata
+    const videoPageUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const response = await fetch(videoPageUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch video page: ${response.status}`);
+    }
+
+    const html = await response.text();
+
+    // Extract title from page
+    const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/) ||
+                      html.match(/<title>([^<]+)<\/title>/);
+
+    const title = titleMatch ? titleMatch[1].replace(/ - YouTube$/, '').trim() : null;
+
+    if (!title) {
+      throw new Error('Could not extract video title');
+    }
+
+    return { title };
+  } catch (error: any) {
+    console.error('Error fetching video metadata:', error);
+    throw new Error(`Failed to fetch video metadata: ${error.message}`);
+  }
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,52 +72,44 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    let metadata;
-    try {
-      console.log('Fetching video metadata...');
-      metadata = await YoutubeMetadata(videoUrl);
-      console.log('Metadata fetched:', { title: metadata?.title });
-    } catch (metadataError: any) {
-      console.error('Error fetching metadata:', metadataError);
+    const videoId = getVideoId(videoUrl);
+    if (!videoId) {
       return NextResponse.json({
-        body: 'Failed to fetch video metadata. Please check if the video URL is valid.',
-        error: 'METADATA_ERROR',
-        details: metadataError?.message,
+        body: 'Invalid YouTube video URL',
+        error: 'VALIDATION_ERROR',
       }, {
         status: 400,
       });
     }
-
-    if (!metadata || !metadata.title) {
-      return NextResponse.json({
-        body: 'Failed to fetch video metadata. The video may not be available.',
-        error: 'METADATA_ERROR',
-      }, {
-        status: 400,
-      });
-    }
-
-    const videoDeatails = {
-      name: metadata.title,
-      slug: getVideoId(videoUrl),
-      url: videoUrl,
-    };
 
     let transcript;
+    let metadata;
     try {
       console.log('Fetching transcript for video:', videoUrl);
-      const videoId = getVideoId(videoUrl);
-      if (!videoId) {
-        throw new Error('Invalid YouTube video URL');
-      }
 
-      const api = new YouTubeTranscriptApi();
+      const transcriptApi = new YouTubeTranscriptApi();
       // fetchTranscript accepts: videoId, languages (optional), format (optional)
-      const response = await api.fetchTranscript(videoId, ['en']);
+      const response = await transcriptApi.fetchTranscript(videoId, ['en']);
+
+      // Get metadata from transcript response (includes title and author)
+      if ((response as any).metadata?.title) {
+        metadata = (response as any).metadata;
+        console.log('Metadata fetched from transcript API:', { title: metadata.title });
+      } else {
+        // Fallback to manual fetch if transcript API doesn't provide metadata
+        console.log('No metadata in transcript response, fetching manually...');
+        metadata = await fetchVideoMetadata(videoId);
+        console.log('Metadata fetched manually:', { title: metadata?.title });
+      }
 
       // Convert to expected format - check actual response structure
       // Response should have transcript.snippets array
       const snippets = (response as any).transcript?.snippets || (response as any).snippets || [];
+
+      // Ensure we have metadata
+      if (!metadata || !metadata.title) {
+        throw new Error('Failed to get video title');
+      }
 
       if (Array.isArray(snippets) && snippets.length > 0) {
         transcript = snippets.map((snippet: any, index: number, array: any[]) => {
@@ -119,6 +144,13 @@ export async function POST(request: NextRequest) {
         status: 400,
       });
     }
+
+    // Create video details from metadata
+    const videoDeatails = {
+      name: metadata.title,
+      slug: videoId,
+      url: videoUrl,
+    };
 
     if (!transcript || transcript.length === 0) {
       console.error('Transcript is empty or null');
