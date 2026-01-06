@@ -60,6 +60,7 @@ const YTLinkInput = () => {
 
   const handleSubmit = async (result: any) => {
     setLoading(true);
+    setErrMsg('');
     try {
       const response = await fetch('/api/create-chat', {
         method: 'POST',
@@ -69,18 +70,30 @@ const YTLinkInput = () => {
         body: JSON.stringify({ videoUrl: `https://www.youtube.com/watch?v=${result.id}` }),
       });
 
+      const responseData = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to create chat');
+        const errorMessage = responseData.body || responseData.error || 'Failed to create chat';
+        console.error('API Error:', {
+          status: response.status,
+          error: responseData.error,
+          body: responseData.body,
+          details: responseData.details,
+        });
+        setErrMsg(errorMessage);
+        return;
       }
 
-      const data: { chatId: string } = await response.json();
-      const { chatId } = data;
+      const { chatId } = responseData;
+      if (!chatId) {
+        throw new Error('No chat ID returned from server');
+      }
 
       router.push(`/chat/${chatId}`);
       setErrMsg('');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error);
-      setErrMsg('Failed to create chat');
+      setErrMsg(error?.message || 'Failed to create chat. Please try again.');
     } finally {
       setLoading(false);
     }
